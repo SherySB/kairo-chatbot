@@ -1,0 +1,21 @@
+streamlit
+fastapi
+uvicorn
+python-multipart
+requests
+
+# Computer Vision & Deep Learning (Python 3.12 supported)
+opencv-python
+deepface
+
+# Speech Processing
+faster-whisper
+gTTS
+
+# RAG & Database
+pymupdf
+chromadb
+firebase-admin
+
+# Testing & Dev
+pytest

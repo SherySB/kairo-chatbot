@@ -1,0 +1,29 @@
+# Byte-compiled / Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+venv/
+.venv/
+env/
+ENV/
+
+# Streamlit config & temporary files
+.streamlit/secrets.toml
+
+# IDE settings
+.vscode/
+.idea/
+
+# Testing & Coverage cache
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Operating System files
+.DS_Store
+Thumbs.db
+
+# Environment variables
+.env
