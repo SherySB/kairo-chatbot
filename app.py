@@ -1,11 +1,17 @@
 import streamlit as st
+import requests
 
-# Custom Page Title & Icon for Kairo
-st.set_page_config(
-    page_title="Kairo | Multimodal AI Assistant",
-    page_icon="🤖",
-    layout="wide"
-)
+# 1. Page Configuration
+st.set_page_config(page_title="Kairo AI Assistant", layout="wide")
+
+# 2. Initialize Session State Variables
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+BACKEND_URL = "http://127.0.0.1:8000"
 
 # --- SIDEBAR: AUTH & DOCUMENT INGESTION ---
 with st.sidebar:
