@@ -7,3 +7,4 @@ firebase-service-account.json
 *.log
 .DS_Store
 *.pyc
+*firebase-adminsdk*.json
