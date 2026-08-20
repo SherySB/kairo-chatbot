@@ -39,9 +39,21 @@ with st.sidebar:
     uploaded_file = st.file_uploader("Feed PDFs to Kairo", type=["pdf"])
 
     if uploaded_file:
-        st.info("Kairo is indexing document...")
-        # TODO: Member B hooks up PyMuPDF / ChromaDB logic here
-        st.success(f"Indexed into Kairo Memory: {uploaded_file.name}")
+        if "last_uploaded_doc" not in st.session_state or st.session_state.last_uploaded_doc != uploaded_file.name:
+            with st.spinner("Kairo is parsing & indexing document into ChromaDB..."):
+                try:
+                    files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "application/pdf")}
+                    res = requests.post(f"{BACKEND_URL}/api/rag/upload-pdf", files=files)
+                    if res.status_code == 200:
+                        data = res.json()
+                        st.session_state.last_uploaded_doc = uploaded_file.name
+                        st.success(f"✅ {data.get('message', 'Indexed successfully!')}")
+                    else:
+                        st.error(f"❌ Failed to index PDF: {res.text}")
+                except Exception as e:
+                    st.error(f"❌ Backend connection error: {e}")
+        else:
+            st.success(f"✅ Indexed in Memory: {uploaded_file.name}")
 
 # --- MAIN CHAT INTERFACE ---
 st.title("💬 Chat with Kairo")
@@ -70,10 +82,16 @@ else:
             st.markdown(prompt_text)
 
         with st.chat_message("assistant"):
-            st.info("Kairo is searching document knowledge base...")
-            # TODO: Member B hooks up RAG LLM query response
-            response_text = "Hello! I am Kairo. Connect my RAG engine to start receiving real document answers."
-            st.markdown(response_text)
+            with st.spinner("Kairo is searching document knowledge base..."):
+                try:
+                    res = requests.post(f"{BACKEND_URL}/api/chat", data={"prompt": prompt_text})
+                    if res.status_code == 200:
+                        response_text = res.json().get("response", "No response received.")
+                    else:
+                        response_text = f"Error from backend: {res.text}"
+                except Exception as e:
+                    response_text = f"Could not connect to backend ({e}). Please ensure FastAPI is running via `uvicorn main:app --reload`."
 
+            st.markdown(response_text)
             st.session_state.messages.append(
                 {"role": "assistant", "content": response_text})
