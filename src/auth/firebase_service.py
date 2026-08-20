@@ -16,10 +16,12 @@ get_firestore_client()                              -> google.cloud.firestore.Cl
 
 # User identity management
 create_user(email, password, display_name)          -> dict
-get_user_by_uid(uid)                               -> dict | None
+get_user_by_uid(uid)                                -> dict | None
 get_user_by_email(email)                           -> dict | None
 verify_id_token(id_token)                          -> dict | None
 delete_user(uid)                                   -> None
+revoke_refresh_tokens(uid)                         -> None
+upsert_user_profile(uid, **metadata)               -> None
 
 # Face embedding persistence
 save_face_embedding(user_id, embedding)             -> None
@@ -30,12 +32,17 @@ authenticate_face(embedding, user_id, threshold)    -> dict
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import logging
 import math
 import os
 
 import firebase_admin
-from firebase_admin import credentials, firestore, auth
+from dotenv import load_dotenv
+from firebase_admin import auth, credentials, firestore
+
+# Ensure environment variables from .env are available immediately
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -53,8 +60,9 @@ def initialize_firebase() -> None:
     """Initialise the Firebase Admin SDK from the environment.
 
     Reads the service-account JSON path from the environment variable
-    ``FIREBASE_CREDENTIALS_PATH``, validates that the variable is set and
-    that the file exists, then initialises the Firebase Admin SDK.
+    ``FIREBASE_CREDENTIALS_PATH``, falling back to 'serviceAccountKey.json'
+    in the root folder if unconfigured. Validates that the file exists,
+    then initialises the Firebase Admin SDK.
 
     If the default Firebase app has already been initialised this call is a
     no-op, making it safe to call multiple times across modules.
@@ -62,7 +70,7 @@ def initialize_firebase() -> None:
     Raises
     ------
     EnvironmentError
-        If ``FIREBASE_CREDENTIALS_PATH`` is not set or is an empty string.
+        If ``FIREBASE_CREDENTIALS_PATH`` is empty.
     FileNotFoundError
         If the path in ``FIREBASE_CREDENTIALS_PATH`` does not point to an
         existing file.
@@ -74,14 +82,15 @@ def initialize_firebase() -> None:
     # file system unnecessarily on repeated calls.
     try:
         firebase_admin.get_app()
-        logger.debug("initialize_firebase: Firebase already initialised, skipping.")
+        logger.debug(
+            "initialize_firebase: Firebase already initialised, skipping.")
         return
     except ValueError:
         # ValueError means no app has been initialised yet — proceed.
         pass
 
-    # Validate the environment variable.
-    cred_path = os.environ.get(_ENV_VAR, "").strip()
+    # Read environment variable with fallback default path
+    cred_path = os.environ.get(_ENV_VAR, "serviceAccountKey.json").strip()
     if not cred_path:
         raise EnvironmentError(
             f"Environment variable '{_ENV_VAR}' is not set or is empty. "
@@ -92,7 +101,8 @@ def initialize_firebase() -> None:
     if not os.path.isfile(cred_path):
         raise FileNotFoundError(
             f"Firebase service-account file not found at '{cred_path}' "
-            f"(from environment variable '{_ENV_VAR}')."
+            f"(from environment variable '{_ENV_VAR}'). "
+            "Ensure 'serviceAccountKey.json' exists in your project root."
         )
 
     cred = credentials.Certificate(cred_path)
@@ -164,7 +174,20 @@ def create_user(email: str, password: str, display_name: str = None) -> dict:
             display_name=display_name
         )
 
-        logger.info(f"create_user: successfully created user with uid '{user_record.uid}'")
+        logger.info(
+            f"create_user: successfully created user with uid '{user_record.uid}'")
+
+        try:
+            upsert_user_profile(
+                uid=user_record.uid,
+                email=user_record.email,
+                display_name=user_record.display_name,
+                email_verified=user_record.email_verified,
+                face_enrolled=False,
+            )
+        except Exception:
+            logger.exception(
+                "create_user: failed to upsert Firestore profile for '%s'", user_record.uid)
 
         return {
             "success": True,
@@ -312,7 +335,8 @@ def verify_id_token(id_token: str) -> dict | None:
 
     try:
         decoded_token = auth.verify_id_token(id_token)
-        logger.debug(f"verify_id_token: successfully verified token for uid '{decoded_token.get('uid')}'")
+        logger.debug(
+            f"verify_id_token: successfully verified token for uid '{decoded_token.get('uid')}'")
         return decoded_token
     except auth.InvalidIdTokenError:
         logger.warning("verify_id_token: invalid or expired ID token")
@@ -344,10 +368,49 @@ def delete_user(uid: str) -> None:
         auth.delete_user(uid)
         logger.info(f"delete_user: successfully deleted user '{uid}'")
     except auth.UserNotFoundError:
-        logger.warning(f"delete_user: user '{uid}' not found (already deleted?)")
+        logger.warning(
+            f"delete_user: user '{uid}' not found (already deleted?)")
     except Exception as exc:
         logger.exception(f"delete_user: error deleting user '{uid}'")
         raise
+
+
+def revoke_refresh_tokens(uid: str) -> None:
+    """Revoke all Firebase refresh tokens for a user."""
+    initialize_firebase()
+    auth.revoke_refresh_tokens(uid)
+    logger.info(
+        "revoke_refresh_tokens: revoked refresh tokens for user '%s'", uid)
+
+
+def upsert_user_profile(
+    uid: str,
+    email: str | None = None,
+    display_name: str | None = None,
+    photo_url: str | None = None,
+    email_verified: bool | None = None,
+    face_enrolled: bool | None = None,
+) -> None:
+    """Create or update Firestore users/{uid} with safe metadata only."""
+    db = get_firestore_client()
+    doc_ref = db.collection("users").document(uid)
+    now = datetime.now(timezone.utc).isoformat()
+    payload: dict[str, object] = {"uid": uid, "updated_at": now}
+
+    if not doc_ref.get().exists:
+        payload["created_at"] = now
+    if email is not None:
+        payload["email"] = email
+    if display_name is not None:
+        payload["display_name"] = display_name
+    if photo_url is not None:
+        payload["photo_url"] = photo_url
+    if email_verified is not None:
+        payload["email_verified"] = email_verified
+    if face_enrolled is not None:
+        payload["face_enrolled"] = face_enrolled
+
+    doc_ref.set(payload, merge=True)
 
 
 # ---------------------------------------------------------------------------
@@ -416,7 +479,13 @@ def save_face_embedding(user_id: str, embedding: list[float]) -> None:
         Any Firestore error propagates to the caller.
     """
     db = get_firestore_client()
-    db.collection(_COLLECTION).document(user_id).set({_EMBEDDING_FIELD: embedding})
+    db.collection(_COLLECTION).document(
+        user_id).set({_EMBEDDING_FIELD: embedding})
+    try:
+        upsert_user_profile(uid=user_id, face_enrolled=True)
+    except Exception:
+        logger.exception(
+            "save_face_embedding: failed to update user profile for '%s'", user_id)
     logger.info("save_face_embedding: embedding saved for user '%s'.", user_id)
 
 
@@ -444,7 +513,8 @@ def get_face_embedding(user_id: str) -> list[float] | None:
     doc = db.collection(_COLLECTION).document(user_id).get()
 
     if not doc.exists:
-        logger.debug("get_face_embedding: no document found for user '%s'.", user_id)
+        logger.debug(
+            "get_face_embedding: no document found for user '%s'.", user_id)
         return None
 
     data = doc.to_dict() or {}
@@ -479,7 +549,8 @@ def delete_face_embedding(user_id: str) -> None:
     """
     db = get_firestore_client()
     db.collection(_COLLECTION).document(user_id).delete()
-    logger.info("delete_face_embedding: embedding deleted for user '%s'.", user_id)
+    logger.info(
+        "delete_face_embedding: embedding deleted for user '%s'.", user_id)
 
 
 def authenticate_face(

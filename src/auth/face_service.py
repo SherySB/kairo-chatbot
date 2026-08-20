@@ -113,7 +113,8 @@ def extract_face_embedding(
         nparr = np.frombuffer(image, dtype=np.uint8)
         image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         if image is None:
-            logger.debug("extract_face_embedding: could not decode raw image bytes.")
+            logger.debug(
+                "extract_face_embedding: could not decode raw image bytes.")
             return None
 
     try:
@@ -136,7 +137,8 @@ def extract_face_embedding(
 
     if not results:
         # represent() returned an empty list — no embedding available.
-        logger.debug("extract_face_embedding: DeepFace.represent returned empty list.")
+        logger.debug(
+            "extract_face_embedding: DeepFace.represent returned empty list.")
         return None
 
     # results is a list of dicts; take the first detected face.
@@ -211,19 +213,8 @@ def verify_user_face(image_bytes: bytes, user_id: str) -> dict:
 
     Decodes *image_bytes* into a NumPy array, extracts a face embedding
     with :func:`extract_face_embedding`, then calls
-    :func:`src.auth.firebase_service.authenticate_face` to compare the
+    ``firebase_service.authenticate_face`` to compare the
     embedding against the stored embedding for *user_id* in Firestore.
-
-    Firebase access is handled exclusively through
-    :mod:`src.auth.firebase_service`; no credentials are touched here.
-
-    Unexpected Firestore errors (network, permissions, SDK failures) are
-    caught, logged, and returned as ``authenticated=False`` with a
-    descriptive ``error`` string.  This is intentional: the function
-    always returns a predictable dict so callers (e.g. the FastAPI endpoint
-    or Streamlit sidebar) do not need to handle raw exceptions for every
-    infrastructure failure.  The exception details are preserved in the
-    application log for debugging.
 
     Parameters
     ----------
@@ -245,7 +236,11 @@ def verify_user_face(image_bytes: bytes, user_id: str) -> dict:
         ``error`` (*str | None*)
             Human-readable explanation on failure, ``None`` on success.
     """
-    from src.auth import firebase_service  # local import avoids circular deps
+    # Safe import handling for both modular and flat project structure
+    try:
+        from . import firebase_service
+    except ImportError:
+        import firebase_service
 
     if not user_id or not user_id.strip():
         return {
@@ -264,13 +259,12 @@ def verify_user_face(image_bytes: bytes, user_id: str) -> dict:
             "error": "Could not decode image bytes into a valid image.",
         }
 
-    # Extract the face embedding.  Unexpected model/TF failures propagate;
-    # only the known "no face detected" case is handled inside
-    # extract_face_embedding and returns None.
+    # Extract the face embedding.
     try:
         embedding = extract_face_embedding(image=image)
     except Exception as exc:  # noqa: BLE001
-        logger.exception("verify_user_face: unexpected error during embedding extraction.")
+        logger.exception(
+            "verify_user_face: unexpected error during embedding extraction.")
         return {
             "authenticated": False,
             "user_id": user_id,
@@ -284,15 +278,15 @@ def verify_user_face(image_bytes: bytes, user_id: str) -> dict:
             "error": "No face detected in the supplied image.",
         }
 
-    # Authenticate against Firestore.  Unexpected Firebase/network errors are
-    # caught here so callers always receive a well-formed dict.
+    # Authenticate against Firestore.
     try:
         result = firebase_service.authenticate_face(
             embedding=embedding,
             user_id=user_id,
         )
     except Exception as exc:  # noqa: BLE001
-        logger.exception("verify_user_face: unexpected error during Firestore authentication.")
+        logger.exception(
+            "verify_user_face: unexpected error during Firestore authentication.")
         return {
             "authenticated": False,
             "user_id": user_id,

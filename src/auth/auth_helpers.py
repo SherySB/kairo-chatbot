@@ -9,12 +9,13 @@ standardized authentication response formatting.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from functools import wraps
 from typing import Any, Callable
 
-from fastapi import HTTPException, Header, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import Depends, HTTPException, Header, status
+from fastapi.security import HTTPBearer
 
 from . import firebase_service
 
@@ -31,17 +32,17 @@ security = HTTPBearer()
 
 def verify_token(authorization: str = Header(None)) -> dict:
     """Verify Firebase ID token from Authorization header.
-    
+
     Parameters
     ----------
     authorization:
         Authorization header in format "Bearer <token>"
-        
+
     Returns
     -------
     dict
         Decoded Firebase token claims
-        
+
     Raises
     ------
     HTTPException
@@ -53,7 +54,7 @@ def verify_token(authorization: str = Header(None)) -> dict:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authorization header is required"
         )
-    
+
     # Extract token from "Bearer <token>" format
     try:
         scheme, token = authorization.split(" ", 1)
@@ -64,7 +65,7 @@ def verify_token(authorization: str = Header(None)) -> dict:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authorization header format. Use 'Bearer <token>'"
         )
-    
+
     try:
         decoded_token = firebase_service.verify_id_token(token)
         if decoded_token is None:
@@ -83,19 +84,19 @@ def verify_token(authorization: str = Header(None)) -> dict:
         ) from exc
 
 
-def get_current_user(authorization: str = Header(None)) -> dict:
-    """Get current authenticated user information.
-    
+def get_current_user(token_data: dict = Depends(verify_token)) -> dict:
+    """Get current authenticated user information via FastAPI dependency injection.
+
     Parameters
     ----------
-    authorization:
-        Authorization header in format "Bearer <token>"
-        
+    token_data:
+        Decoded token claims passed automatically via Depends(verify_token)
+
     Returns
     -------
     dict
         User information with keys: uid, email, display_name, etc.
-        
+
     Raises
     ------
     HTTPException
@@ -103,15 +104,14 @@ def get_current_user(authorization: str = Header(None)) -> dict:
         404 if user not found
         500 if service error
     """
-    token_data = verify_token(authorization)
     uid = token_data.get("uid")
-    
+
     if not uid:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token: missing user ID"
         )
-    
+
     try:
         user = firebase_service.get_user_by_uid(uid)
         if user is None:
@@ -141,7 +141,7 @@ def format_auth_response(
     **kwargs
 ) -> dict:
     """Format standardized authentication response.
-    
+
     Parameters
     ----------
     success:
@@ -160,7 +160,7 @@ def format_auth_response(
         Error message on failure
     **kwargs:
         Additional fields to include in response
-        
+
     Returns
     -------
     dict
@@ -175,10 +175,10 @@ def format_auth_response(
         "provider": provider,
         "error": error,
     }
-    
+
     # Add any additional fields
     response.update(kwargs)
-    
+
     # Remove None values for cleaner response
     return {k: v for k, v in response.items() if v is not None}
 
@@ -190,16 +190,22 @@ def format_auth_response(
 
 def require_auth(f: Callable) -> Callable:
     """Decorator to require authentication for FastAPI endpoints.
-    
+
+    Supports both sync and async endpoints seamlessly.
+
     Usage:
         @app.get("/protected")
         @require_auth
         async def protected_endpoint(current_user: dict = Depends(get_current_user)):
             return {"message": f"Hello {current_user['email']}"}
     """
-    @wraps(f)
-    async def wrapper(*args, **kwargs):
-        # The actual authentication is handled by FastAPI dependencies
-        # This decorator is for marking endpoints as requiring auth
-        return await f(*args, **kwargs)
-    return wrapper
+    if asyncio.iscoroutinefunction(f):
+        @wraps(f)
+        async def async_wrapper(*args, **kwargs):
+            return await f(*args, **kwargs)
+        return async_wrapper
+    else:
+        @wraps(f)
+        def sync_wrapper(*args, **kwargs):
+            return f(*args, **kwargs)
+        return sync_wrapper

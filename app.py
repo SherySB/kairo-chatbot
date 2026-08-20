@@ -99,7 +99,7 @@ with st.sidebar:
     camera_photo = st.camera_input("Capture Face")
 
     if camera_photo and user_id_input:
-        btn_label = "Verify & Login" if auth_mode == "Login" else "Enrol Face"
+        btn_label = "Verify & Login" if auth_mode == "Login" else "Enroll Face"
         if st.button(btn_label):
             image_bytes = camera_photo.getvalue()
             endpoint = (
@@ -167,9 +167,9 @@ with st.sidebar:
     st.divider()
 
     # ---- DEV MODE TOGGLE ----
-    dev_mode = st.checkbox("⚙️ Enable Dev Mode (Bypass Auth)")
-    if dev_mode:
-        st.session_state.authenticated = True
+    #dev_mode = st.checkbox("⚙️ Enable Dev Mode (Bypass Auth)")
+    #if dev_mode:
+    #    st.session_state.authenticated = True
 
 # --- MAIN CHAT INTERFACE ---
 st.markdown("<h1>💬 Chat Workspace</h1>", unsafe_allow_html=True)
