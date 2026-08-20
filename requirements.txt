@@ -15,7 +15,10 @@ gTTS
 # RAG & Database
 pymupdf
 chromadb
+sentence-transformers
 firebase-admin
+groq
+python-dotenv
 
 # Testing & Dev
 pytest
