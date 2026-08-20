@@ -1,4 +1,5 @@
 import os
+import shutil
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, Header, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -8,6 +9,8 @@ from typing import Optional
 from src.auth import face_service, firebase_service
 from src.auth.auth_helpers import get_current_user, format_auth_response, verify_token
 from src.voice import voice_service
+from src.rag.parser_service import extract_text_from_pdf, chunk_text
+from src.rag.rag_service import RAGService
 
 app = FastAPI(
     title="Kairo AI Assistant API",
@@ -23,6 +26,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+rag = RAGService()
 
 
 @app.get("/")
@@ -477,11 +482,38 @@ def _cleanup_file(path: str):
 
 @app.post("/api/rag/upload-pdf")
 async def upload_pdf(file: UploadFile = File(...)):
-    # Member B will plug in PyMuPDF + ChromaDB logic here
-    return {"status": "success", "filename": file.filename, "chunks_indexed": 12}
+    try:
+        temp_dir = "temp_uploads"
+        os.makedirs(temp_dir, exist_ok=True)
+        file_path = os.path.join(temp_dir, file.filename)
+
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        text = extract_text_from_pdf(file_path)
+        if not text.strip():
+            raise HTTPException(
+                status_code=400, detail="Failed to extract text from PDF.")
+
+        chunks = chunk_text(text, chunk_size=500, overlap=50)
+        rag.index_chunks(chunks, doc_id=file.filename)
+
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
+        return {
+            "status": "success",
+            "filename": file.filename,
+            "chunks_indexed": len(chunks)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/chat")
 async def chat_query(prompt: str = Form(...)):
-    # Member B will plug in LLM + RAG response generation here
-    return {"status": "success", "response": f"Kairo Echo: {prompt}"}
+    try:
+        answer = rag.query(prompt)
+        return {"status": "success", "response": answer}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
