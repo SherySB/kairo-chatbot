@@ -1,10 +1,10 @@
-import fitz  # PyMuPDF
+import pymupdf  # PyMuPDF
 from typing import List
 
 def extract_text_from_pdf(pdf_path: str) -> str:
     """PDF file se saara text extract karta hai."""
     try:
-        doc = fitz.open(pdf_path)
+        doc = pymupdf.open(pdf_path)
         full_text = []
         for page in doc:
             text = page.get_text()

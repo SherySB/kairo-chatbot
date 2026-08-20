@@ -25,5 +25,8 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
+# Vector Database & Storage
+chroma_db/
+
 # Environment variables
 .env
