@@ -6,20 +6,20 @@ python-multipart
 requests
 
 # Vision
-opencv-python==4.13.0.92
-deepface==0.0.100
-tensorflow==2.18.0
-tf-keras==2.18.0
+opencv-python-headless
+deepface
+tensorflow
+tf-keras
 
 # Voice
-faster-whisper==1.2.1
-gTTS==2.5.4
+faster-whisper
+gTTS
 
 # RAG & Database
 pymupdf
 chromadb
 sentence-transformers
-firebase-admin==7.2.0
+firebase-admin
 groq
 python-dotenv
 
