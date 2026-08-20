@@ -1,0 +1,14 @@
+base with a given name
+);
+
+CREATE TABLE IF NOT EXISTS collections_tmp (
+    id TEXT PRIMARY KEY, -- unique globally
+    name TEXT NOT NULL, -- unique per database
+    topic TEXT NOT NULL,
+    dimension INTEGER,
+    database_id TEXT NOT NULL REFERENCES databases(id) ON DELETE CASCADE,
+    UNIQUE (name, database_id)
+);
+
+-- Create default tenant and database
+INSERT OR REPLACE INTO tenants (id) VALUES
