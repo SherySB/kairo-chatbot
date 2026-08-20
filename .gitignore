@@ -1,31 +1,38 @@
-# Python & Environment
+.venv/
+venv/
+env/
+ENV/
+
 __pycache__/
 *.py[cod]
 *$py.class
-.venv/
-venv/
-ENV/
-env/
+*.pyc
+
 .env
+*.env
 
-# ChromaDB & Vector Stores
-chroma_db/
-*.chroma
-temp_uploads/
-
-# Firebase & Security Keys
+firebase-service-account.json
 *firebase-adminsdk*.json
 serviceAccountKey.json
 *.pem
 *.key
 
-# IDEs & System Files
+chroma_db/
+*.chroma
+temp_uploads/
+
+.streamlit/secrets.toml
+
 .vscode/
 .idea/
-.DS_Store
-*.log
 
-# Audio & Temporary Test Files
+.pytest_cache/
+.coverage
+htmlcov/
+
+*.log
+.DS_Store
+Thumbs.db
 *.wav
 *.mp3
 sample_test_doc.pdf
