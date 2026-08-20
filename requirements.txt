@@ -14,6 +14,7 @@ tf-keras
 # Voice
 faster-whisper
 gTTS
+audio-recorder-streamlit
 
 # RAG & Database
 pymupdf
