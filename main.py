@@ -11,25 +11,28 @@ from src.auth.auth_helpers import get_current_user, format_auth_response, verify
 from src.voice import voice_service
 from src.rag.parser_service import extract_text_from_pdf, chunk_text
 from src.rag.rag_service import RAGService
-
 app = FastAPI(
     title="Kairo AI Assistant API",
     description="Backend API endpoints for authentication, RAG search, and voice handling.",
     version="1.0.0",
 )
 
-# Enable CORS for local Streamlit communication
+# Enable CORS for local Streamlit and production Vercel communication
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        
+        # Your live Streamlit URL
+        "https://kairo-chatbot-hvdyrf7cayfqdjrksuvsdu.streamlit.app/",
+        "http://localhost:8501",
+        "http://127.0.0.1:8501",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 rag = RAGService()
-
-
 @app.get("/")
 def read_root():
     return {"status": "online", "message": "Kairo Backend API is running!"}
