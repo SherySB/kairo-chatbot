@@ -40,20 +40,19 @@ async def verify_face(file: UploadFile = File(...)):
 @app.post("/api/rag/upload-pdf")
 async def upload_pdf(file: UploadFile = File(...)):
     try:
-        # Save uploaded PDF to a temporary file
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
-            shutil.copyfileobj(file.file, tmp_file)
-            tmp_path = tmp_file.name
+        # Read file bytes directly in memory
+        pdf_bytes = await file.read()
+        if not pdf_bytes:
+            raise HTTPException(status_code=400, detail="Uploaded PDF file is empty (0 bytes).")
 
-        # Extract text using PyMuPDF
-        text = extract_text_from_pdf(tmp_path)
-
-        # Cleanup temporary file
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)
+        # Extract text using PyMuPDF stream
+        text = extract_text_from_pdf(pdf_bytes)
 
         if not text.strip():
-            raise HTTPException(status_code=400, detail="No readable text found in the uploaded PDF.")
+            raise HTTPException(
+                status_code=400, 
+                detail="Is PDF mein selectable digital text nahi mila. Agar ye scanned photo/image PDF hai toh please digital/typed text wali PDF upload karein."
+            )
 
         # Chunk text into 500-character pieces with 50-character overlap
         chunks = chunk_text(text, chunk_size=500, overlap=50)
@@ -65,7 +64,7 @@ async def upload_pdf(file: UploadFile = File(...)):
             "status": "success",
             "filename": file.filename,
             "chunks_indexed": len(chunks),
-            "message": f"Successfully indexed {len(chunks)} chunks into ChromaDB."
+            "message": f"Successfully indexed {len(chunks)} chunks from {file.filename} into ChromaDB."
         }
     except HTTPException:
         raise
