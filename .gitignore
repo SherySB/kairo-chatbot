@@ -1,29 +1,31 @@
-# Byte-compiled / Python cache files
+# Python & Environment
 __pycache__/
 *.py[cod]
 *$py.class
-
-# Virtual Environment
-venv/
 .venv/
-env/
+venv/
 ENV/
+env/
+.env
 
-# Streamlit config & temporary files
-.streamlit/secrets.toml
+# ChromaDB & Vector Stores
+chroma_db/
+*.chroma
+temp_uploads/
 
-# IDE settings
+# Firebase & Security Keys
+*firebase-adminsdk*.json
+serviceAccountKey.json
+*.pem
+*.key
+
+# IDEs & System Files
 .vscode/
 .idea/
-
-# Testing & Coverage cache
-.pytest_cache/
-.coverage
-htmlcov/
-
-# Operating System files
 .DS_Store
-Thumbs.db
+*.log
 
-# Environment variables
-.env
+# Audio & Temporary Test Files
+*.wav
+*.mp3
+sample_test_doc.pdf
