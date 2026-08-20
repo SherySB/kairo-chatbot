@@ -1,17 +1,27 @@
 """
 firebase_service.py
 -------------------
-Firebase initialisation and Firestore persistence layer for the Kairo chatbot.
+Firebase initialisation, authentication, and Firestore persistence layer for the Kairo chatbot.
 
 Reads the service-account credential path from the environment variable
-``FIREBASE_CREDENTIALS_PATH`` and provides a Firestore client accessor,
-face-embedding persistence, and similarity-based face authentication.
+``FIREBASE_CREDENTIALS_PATH`` and provides Firebase Authentication user management,
+Firestore client accessor, face-embedding persistence, and similarity-based face authentication.
 No credentials, project IDs, or file paths are hardcoded here.
 
 Public API
 ----------
+# Firebase initialization
 initialize_firebase()                               -> None
 get_firestore_client()                              -> google.cloud.firestore.Client
+
+# User identity management
+create_user(email, password, display_name)          -> dict
+get_user_by_uid(uid)                               -> dict | None
+get_user_by_email(email)                           -> dict | None
+verify_id_token(id_token)                          -> dict | None
+delete_user(uid)                                   -> None
+
+# Face embedding persistence
 save_face_embedding(user_id, embedding)             -> None
 get_face_embedding(user_id)                         -> list[float] | None
 delete_face_embedding(user_id)                      -> None
@@ -25,7 +35,7 @@ import math
 import os
 
 import firebase_admin
-from firebase_admin import credentials, firestore
+from firebase_admin import credentials, firestore, auth
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +124,230 @@ def get_firestore_client():
     """
     initialize_firebase()
     return firestore.client()
+
+
+# ---------------------------------------------------------------------------
+# User identity management functions
+# ---------------------------------------------------------------------------
+
+
+def create_user(email: str, password: str, display_name: str = None) -> dict:
+    """Create a new Firebase Authentication user.
+
+    Parameters
+    ----------
+    email:
+        User's email address (must be unique).
+    password:
+        User's password (minimum 6 characters required by Firebase).
+    display_name:
+        Optional display name for the user.
+
+    Returns
+    -------
+    dict
+        Contains keys: 'success' (bool), 'uid' (str | None), 'email' (str | None),
+        'display_name' (str | None), 'error' (str | None)
+
+    Raises
+    ------
+    Exception
+        Firebase Authentication errors propagate to the caller.
+    """
+    initialize_firebase()
+
+    try:
+        # Create user with email and password
+        user_record = auth.create_user(
+            email=email,
+            password=password,
+            display_name=display_name
+        )
+
+        logger.info(f"create_user: successfully created user with uid '{user_record.uid}'")
+
+        return {
+            "success": True,
+            "uid": user_record.uid,
+            "email": user_record.email,
+            "display_name": user_record.display_name,
+            "error": None
+        }
+
+    except auth.EmailAlreadyExistsError:
+        return {
+            "success": False,
+            "uid": None,
+            "email": None,
+            "display_name": None,
+            "error": "An account with this email already exists."
+        }
+    except auth.WeakPasswordError:
+        return {
+            "success": False,
+            "uid": None,
+            "email": None,
+            "display_name": None,
+            "error": "Password is too weak. Must be at least 6 characters."
+        }
+    except Exception as exc:
+        logger.exception("create_user: unexpected error creating user")
+        return {
+            "success": False,
+            "uid": None,
+            "email": None,
+            "display_name": None,
+            "error": f"User creation failed: {exc}"
+        }
+
+
+def get_user_by_uid(uid: str) -> dict | None:
+    """Retrieve a Firebase user by their UID.
+
+    Parameters
+    ----------
+    uid:
+        Firebase user ID.
+
+    Returns
+    -------
+    dict | None
+        User information dict with keys: 'uid', 'email', 'display_name', 'email_verified'
+        Returns None if user not found.
+
+    Raises
+    ------
+    Exception
+        Firebase Authentication errors propagate to the caller.
+    """
+    initialize_firebase()
+
+    try:
+        user_record = auth.get_user(uid)
+        return {
+            "uid": user_record.uid,
+            "email": user_record.email,
+            "display_name": user_record.display_name,
+            "email_verified": user_record.email_verified,
+            "provider_data": [
+                {
+                    "provider_id": provider.provider_id,
+                    "uid": provider.uid,
+                    "email": provider.email
+                } for provider in user_record.provider_data
+            ]
+        }
+    except auth.UserNotFoundError:
+        logger.debug(f"get_user_by_uid: user with uid '{uid}' not found")
+        return None
+    except Exception as exc:
+        logger.exception(f"get_user_by_uid: error retrieving user '{uid}'")
+        raise
+
+
+def get_user_by_email(email: str) -> dict | None:
+    """Retrieve a Firebase user by their email address.
+
+    Parameters
+    ----------
+    email:
+        User's email address.
+
+    Returns
+    -------
+    dict | None
+        User information dict with keys: 'uid', 'email', 'display_name', 'email_verified'
+        Returns None if user not found.
+
+    Raises
+    ------
+    Exception
+        Firebase Authentication errors propagate to the caller.
+    """
+    initialize_firebase()
+
+    try:
+        user_record = auth.get_user_by_email(email)
+        return {
+            "uid": user_record.uid,
+            "email": user_record.email,
+            "display_name": user_record.display_name,
+            "email_verified": user_record.email_verified,
+            "provider_data": [
+                {
+                    "provider_id": provider.provider_id,
+                    "uid": provider.uid,
+                    "email": provider.email
+                } for provider in user_record.provider_data
+            ]
+        }
+    except auth.UserNotFoundError:
+        logger.debug(f"get_user_by_email: user with email '{email}' not found")
+        return None
+    except Exception as exc:
+        logger.exception(f"get_user_by_email: error retrieving user '{email}'")
+        raise
+
+
+def verify_id_token(id_token: str) -> dict | None:
+    """Verify a Firebase ID token and return the decoded claims.
+
+    Parameters
+    ----------
+    id_token:
+        Firebase ID token from client-side authentication.
+
+    Returns
+    -------
+    dict | None
+        Decoded token with keys: 'uid', 'email', 'email_verified', 'name', 'picture', etc.
+        Returns None if token is invalid or expired.
+
+    Raises
+    ------
+    Exception
+        Firebase Authentication errors propagate to the caller.
+    """
+    initialize_firebase()
+
+    try:
+        decoded_token = auth.verify_id_token(id_token)
+        logger.debug(f"verify_id_token: successfully verified token for uid '{decoded_token.get('uid')}'")
+        return decoded_token
+    except auth.InvalidIdTokenError:
+        logger.warning("verify_id_token: invalid or expired ID token")
+        return None
+    except auth.ExpiredIdTokenError:
+        logger.warning("verify_id_token: expired ID token")
+        return None
+    except Exception as exc:
+        logger.exception("verify_id_token: unexpected error verifying token")
+        raise
+
+
+def delete_user(uid: str) -> None:
+    """Delete a Firebase Authentication user.
+
+    Parameters
+    ----------
+    uid:
+        Firebase user ID to delete.
+
+    Raises
+    ------
+    Exception
+        Firebase Authentication errors propagate to the caller.
+    """
+    initialize_firebase()
+
+    try:
+        auth.delete_user(uid)
+        logger.info(f"delete_user: successfully deleted user '{uid}'")
+    except auth.UserNotFoundError:
+        logger.warning(f"delete_user: user '{uid}' not found (already deleted?)")
+    except Exception as exc:
+        logger.exception(f"delete_user: error deleting user '{uid}'")
+        raise
 
 
 # ---------------------------------------------------------------------------

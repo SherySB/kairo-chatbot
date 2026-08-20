@@ -8,6 +8,7 @@ Public API
 capture_frame_from_webcam(camera_index, warmup_frames) -> np.ndarray | None
 extract_face_embedding(image, model_name)              -> list[float] | None
 get_face_embedding_from_webcam(camera_index, model_name) -> dict
+verify_user_face(image_bytes, user_id)                 -> dict
 """
 
 from __future__ import annotations
@@ -80,7 +81,7 @@ def capture_frame_from_webcam(
 
 
 def extract_face_embedding(
-    image: Union[np.ndarray, str],
+    image: Union[np.ndarray, str, bytes],
     model_name: str = "Facenet",
 ) -> list[float] | None:
     """Extract a face embedding vector from an image.
@@ -90,8 +91,8 @@ def extract_face_embedding(
     Parameters
     ----------
     image:
-        A BGR NumPy / OpenCV image array **or** a file path accepted by
-        DeepFace (string).
+        A BGR NumPy / OpenCV image array, raw image bytes, **or** a file path
+        accepted by DeepFace (string).
     model_name:
         The DeepFace recognition model to use.  Defaults to ``"Facenet"``.
 
@@ -108,6 +109,13 @@ def extract_face_embedding(
         is **not** swallowed — it propagates to the caller so that problems
         remain visible during development and production debugging.
     """
+    if isinstance(image, bytes):
+        nparr = np.frombuffer(image, dtype=np.uint8)
+        image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        if image is None:
+            logger.debug("extract_face_embedding: could not decode raw image bytes.")
+            return None
+
     try:
         results = DeepFace.represent(
             img_path=image,
@@ -195,4 +203,104 @@ def get_face_embedding_from_webcam(
         "success": True,
         "embedding": embedding,
         "error": None,
+    }
+
+
+def verify_user_face(image_bytes: bytes, user_id: str) -> dict:
+    """Verify a user's identity from raw image bytes.
+
+    Decodes *image_bytes* into a NumPy array, extracts a face embedding
+    with :func:`extract_face_embedding`, then calls
+    :func:`src.auth.firebase_service.authenticate_face` to compare the
+    embedding against the stored embedding for *user_id* in Firestore.
+
+    Firebase access is handled exclusively through
+    :mod:`src.auth.firebase_service`; no credentials are touched here.
+
+    Unexpected Firestore errors (network, permissions, SDK failures) are
+    caught, logged, and returned as ``authenticated=False`` with a
+    descriptive ``error`` string.  This is intentional: the function
+    always returns a predictable dict so callers (e.g. the FastAPI endpoint
+    or Streamlit sidebar) do not need to handle raw exceptions for every
+    infrastructure failure.  The exception details are preserved in the
+    application log for debugging.
+
+    Parameters
+    ----------
+    image_bytes:
+        Raw bytes of a JPEG, PNG, or other image format supported by
+        OpenCV's ``imdecode``.
+    user_id:
+        The Firestore document ID of the user to authenticate against.
+
+    Returns
+    -------
+    dict
+        Always contains exactly these keys:
+
+        ``authenticated`` (*bool*)
+            ``True`` when the face embedding matched the stored embedding.
+        ``user_id`` (*str*)
+            The *user_id* that was checked.
+        ``error`` (*str | None*)
+            Human-readable explanation on failure, ``None`` on success.
+    """
+    from src.auth import firebase_service  # local import avoids circular deps
+
+    if not user_id or not user_id.strip():
+        return {
+            "authenticated": False,
+            "user_id": user_id,
+            "error": "user_id must not be empty.",
+        }
+
+    # Decode bytes -> NumPy BGR image.
+    nparr = np.frombuffer(image_bytes, dtype=np.uint8)
+    image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    if image is None:
+        return {
+            "authenticated": False,
+            "user_id": user_id,
+            "error": "Could not decode image bytes into a valid image.",
+        }
+
+    # Extract the face embedding.  Unexpected model/TF failures propagate;
+    # only the known "no face detected" case is handled inside
+    # extract_face_embedding and returns None.
+    try:
+        embedding = extract_face_embedding(image=image)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("verify_user_face: unexpected error during embedding extraction.")
+        return {
+            "authenticated": False,
+            "user_id": user_id,
+            "error": f"Embedding extraction failed: {exc}",
+        }
+
+    if embedding is None:
+        return {
+            "authenticated": False,
+            "user_id": user_id,
+            "error": "No face detected in the supplied image.",
+        }
+
+    # Authenticate against Firestore.  Unexpected Firebase/network errors are
+    # caught here so callers always receive a well-formed dict.
+    try:
+        result = firebase_service.authenticate_face(
+            embedding=embedding,
+            user_id=user_id,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("verify_user_face: unexpected error during Firestore authentication.")
+        return {
+            "authenticated": False,
+            "user_id": user_id,
+            "error": f"Authentication failed: {exc}",
+        }
+
+    return {
+        "authenticated": result.get("authenticated", False),
+        "user_id": user_id,
+        "error": result.get("error"),
     }
