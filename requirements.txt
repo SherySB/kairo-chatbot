@@ -6,7 +6,7 @@ python-multipart
 requests
 
 # Vision
-opencv-python-headless
+opencv-python-headless==4.12.0.88
 deepface
 tensorflow
 tf-keras
