@@ -23,6 +23,9 @@ from deepface import DeepFace
 logger = logging.getLogger(__name__)
 
 
+# Pre-load the model once at import time so it's not reloaded on every request.
+DeepFace.build_model("Facenet")
+
 # ---------------------------------------------------------------------------
 # Public functions
 # ---------------------------------------------------------------------------
