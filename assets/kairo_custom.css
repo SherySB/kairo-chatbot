@@ -1,0 +1,191 @@
+/* ==========================================================
+   Kairo Chatbot — Streamlit theme
+   Ported from the Tailwind mockup's design tokens
+   ========================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap');
+
+:root {
+    --kairo-primary: #1f252a;
+    --kairo-primary-container: #343a40;
+    --kairo-on-primary: #ffffff;
+    --kairo-background: #fcf9f8;
+    --kairo-surface: #fcf9f8;
+    --kairo-surface-container: #f0eded;
+    --kairo-surface-container-low: #f6f3f2;
+    --kairo-surface-container-high: #eae7e7;
+    --kairo-surface-container-lowest: #ffffff;
+    --kairo-on-surface: #1c1b1b;
+    --kairo-on-surface-variant: #44474a;
+    --kairo-outline: #75777b;
+    --kairo-outline-variant: #c5c6cb;
+    --kairo-error: #ba1a1a;
+    --kairo-error-container: #ffdad6;
+}
+
+/* ---- Global app background + font ---- */
+html, body, [class*="css"] {
+    font-family: 'Geist', sans-serif !important;
+}
+
+.stApp {
+    background-color: var(--kairo-background);
+    color: var(--kairo-on-surface);
+}
+
+/* ---- Sidebar (matches SideNavBar) ---- */
+section[data-testid="stSidebar"] {
+    background-color: var(--kairo-surface-container-low);
+    border-right: 1px solid var(--kairo-outline-variant);
+}
+
+section[data-testid="stSidebar"] h1,
+section[data-testid="stSidebar"] h2,
+section[data-testid="stSidebar"] h3 {
+    color: var(--kairo-primary);
+    font-weight: 600;
+}
+
+/* ---- Buttons (primary action style) ---- */
+.stButton > button {
+    background-color: var(--kairo-primary-container);
+    color: var(--kairo-on-primary);
+    border: none;
+    border-radius: 8px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    padding: 0.6rem 1.2rem;
+    transition: all 0.2s ease;
+}
+
+.stButton > button:hover {
+    background-color: var(--kairo-primary);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+}
+
+/* Secondary / outline buttons — wrap in st.container with class via markdown if needed */
+.stButton > button[kind="secondary"] {
+    background-color: var(--kairo-surface-container-lowest);
+    color: var(--kairo-on-surface);
+    border: 1px solid var(--kairo-outline-variant);
+}
+
+/* ---- Text inputs / password fields ---- */
+.stTextInput > div > div > input,
+.stTextArea textarea {
+    background-color: var(--kairo-surface-container-lowest);
+    border: 1px solid var(--kairo-outline-variant);
+    border-radius: 6px;
+    color: var(--kairo-on-surface);
+    font-family: 'Geist', sans-serif;
+}
+
+.stTextInput > div > div > input:focus,
+.stTextArea textarea:focus {
+    border-color: var(--kairo-primary);
+    box-shadow: 0 0 0 2px var(--kairo-surface-container-high);
+}
+
+/* ---- Tabs (Login / Sign Up) ---- */
+.stTabs [data-baseweb="tab-list"] {
+    border-bottom: 1px solid var(--kairo-outline-variant);
+    gap: 0;
+}
+
+.stTabs [data-baseweb="tab"] {
+    font-weight: 500;
+    color: var(--kairo-on-surface-variant);
+    padding: 12px 16px;
+}
+
+.stTabs [aria-selected="true"] {
+    color: var(--kairo-primary) !important;
+    border-bottom: 2px solid var(--kairo-primary) !important;
+}
+
+/* ---- Chat messages ---- */
+[data-testid="stChatMessage"] {
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin-bottom: 12px;
+    border: 1px solid var(--kairo-outline-variant);
+    background-color: var(--kairo-surface-container-high);
+}
+
+/* User messages (Streamlit marks role via aria-label / avatar; target nth-of-type or use st.chat_message("user")) */
+[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) {
+    background-color: var(--kairo-primary-container);
+    color: var(--kairo-on-primary);
+    margin-left: 15%;
+}
+
+[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) p {
+    color: var(--kairo-on-primary);
+}
+
+/* ---- Chat input (bottom bar) ---- */
+[data-testid="stChatInput"] {
+    border: 1px solid var(--kairo-outline-variant);
+    border-radius: 10px;
+    background-color: var(--kairo-surface-container-lowest);
+}
+
+[data-testid="stChatInput"] textarea {
+    font-family: 'Geist', sans-serif;
+    color: var(--kairo-on-surface);
+}
+
+/* ---- Status dot (System Online) ---- */
+.kairo-status-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: #10b981;
+    box-shadow: 0 0 8px rgba(16,185,129,0.5);
+    margin-right: 6px;
+}
+
+/* ---- Sidebar brand header ---- */
+.brand-container {
+    background: var(--kairo-surface-container-lowest);
+    border: 1px solid var(--kairo-outline-variant);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 20px;
+}
+
+.brand-title {
+    color: var(--kairo-primary) !important;
+    font-size: 1.4rem;
+    font-weight: 700;
+    margin: 0;
+}
+
+.brand-sub {
+    color: var(--kairo-on-surface-variant);
+    font-size: 0.8rem;
+    margin-top: 4px;
+}
+
+/* ---- Auth restricted warning card ---- */
+.auth-card-warning {
+    background: var(--kairo-error-container);
+    border: 1px solid var(--kairo-error);
+    border-left: 5px solid var(--kairo-error);
+    border-radius: 10px;
+    padding: 18px 22px;
+    color: var(--kairo-error);
+    font-size: 0.95rem;
+    margin-bottom: 20px;
+}
+
+/* ---- Radio buttons (Login/Signup toggle) ---- */
+.stRadio > div {
+    gap: 8px;
+}
+
+/* ---- Toggle switch (TTS read-aloud) ---- */
+[data-testid="stToggle"] label {
+    color: var(--kairo-on-surface-variant);
+}
