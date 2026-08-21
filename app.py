@@ -1,13 +1,11 @@
 import io
 import os
-from pathlib import Path
 from typing import Any
 import requests
 import streamlit as st
 from audio_recorder_streamlit import audio_recorder
 
 API_BASE_URL = os.getenv("KAIRO_API_URL", "http://127.0.0.1:8000").rstrip("/")
-BASE_DIR = Path(__file__).resolve().parent
 
 st.set_page_config(
     page_title="Kairo AI Assistant",
@@ -16,21 +14,23 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-
-# --- EXTERNAL CSS LOADER (Kairo light theme) ---
-def load_css(file_path: Path) -> None:
-    """Injects the Kairo custom theme CSS into the Streamlit app."""
-    try:
-        with open(file_path) as f:
-            st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
-    except FileNotFoundError:
-        st.warning(
-            f"Theme file not found at {file_path}. Falling back to default Streamlit styling."
-        )
-
-
-load_css(BASE_DIR / "assets" / "kairo_custom.css")
-
+# --- CUSTOM DARK MODE CSS ---
+st.markdown(
+    """
+    <style>
+    .stApp { background-color: #0B0E14 !important; font-family: 'Inter', sans-serif; }
+    section[data-testid="stSidebar"] { background-color: #12161F !important; border-right: 1px solid #1E2638 !important; }
+    .brand-container { background: linear-gradient(135deg, #1A2333 0%, #12161F 100%); border: 1px solid #2A364F; border-radius: 12px; padding: 16px; margin-bottom: 20px; }
+    .brand-title { color: #00E5FF !important; font-size: 1.4rem; font-weight: 800; margin: 0; }
+    .brand-sub { color: #8A99AD; font-size: 0.8rem; margin-top: 4px; }
+    .auth-card-warning { background: rgba(255, 75, 75, 0.08); border: 1px solid rgba(255, 75, 75, 0.3); border-left: 5px solid #FF4B4B; border-radius: 10px; padding: 18px 22px; color: #FFA3A3; font-size: 0.95rem; margin-bottom: 20px; }
+    div[data-testid="stChatInput"] { border-radius: 12px !important; border: 1px solid #2A364F !important; background-color: #161C27 !important; }
+    .stButton > button { width: 100%; background: linear-gradient(90deg, #00E5FF 0%, #0088FF 100%) !important; color: #0B0E14 !important; font-weight: 700 !important; border: none !important; border-radius: 8px !important; padding: 10px 16px !important; }
+    h1, h2, h3 { color: #E2E8F0 !important; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 # --- SESSION STATE INITIALISATION ---
 if "authenticated" not in st.session_state:
@@ -169,7 +169,7 @@ with st.sidebar:
     # ---- DEV MODE TOGGLE ----
     # dev_mode = st.checkbox("⚙️ Enable Dev Mode (Bypass Auth)")
     # if dev_mode:
-    #     st.session_state.authenticated = True
+    #    st.session_state.authenticated = True
 
 # --- MAIN CHAT INTERFACE ---
 st.markdown("<h1>💬 Chat Workspace</h1>", unsafe_allow_html=True)
@@ -215,8 +215,8 @@ else:
         st.write("🎙️ **Live Mic Recording**")
         recorded_audio = audio_recorder(
             text="",
-            recording_color="#1f252a",
-            neutral_color="#75777b",
+            recording_color="#00E5FF",
+            neutral_color="#8A99AD",
             icon_size="2x"
         )
 
